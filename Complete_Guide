@@ -63,7 +63,7 @@ Run **for BOTH containers**:
 ```bash
 docker exec -it server1 bash
 apt update
-apt install -y openssh-server python3 sudo nano
+apt install -y openssh-server python3 sudo nano   - 6 asia - 44 -kolkata
 mkdir -p /run/sshd
 chmod 755 /run/sshd
 passwd root   # password = root
@@ -76,6 +76,8 @@ Add **at the end of the file**:
 PermitRootLogin yes
 PasswordAuthentication yes
 ```
+
+ctrl + o + enter + ctrl + x
 
 Restart SSH:
 
@@ -92,6 +94,144 @@ Repeat same steps for `server2`.
 
 ```bash
 ssh root@localhost -p 2222
+
+if error come - solution
+
+Perfect — this is **expected behavior**, not an error 👍
+You didn’t break anything. This happens **every time Docker containers are recreated**.
+
+Let’s fix it **cleanly and permanently**, and I’ll explain *why* it happens so you’ll never be confused again.
+
+---
+
+## ❗ What this warning actually means
+
+```
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+```
+
+SSH is saying:
+
+> “Earlier, I connected to something on `localhost:2222`.
+> Now that thing has a **different SSH identity**.
+> I’m stopping you to prevent a possible attack.”
+
+In your case:
+
+* You **deleted and recreated Docker containers**
+* New container = new SSH host key
+* Port `2222` stayed the same
+* SSH thinks something suspicious happened
+
+👉 This is **100% normal in Docker labs**
+
+---
+
+## ✅ SAFE FIX (Recommended way)
+
+### 🔹 Remove old SSH key for this port
+
+Run **on your Mac** (not inside container):
+
+```bash
+ssh-keygen -R "[localhost]:2222"
+```
+
+You should see something like:
+
+```
+Host [localhost]:2222 found: line 2
+known_hosts updated.
+```
+
+---
+
+### 🔹 Try SSH again
+
+```bash
+ssh root@localhost -p 2222
+```
+
+When prompted:
+
+```
+Are you sure you want to continue connecting (yes/no)?
+```
+
+Type:
+
+```
+yes
+```
+
+Enter password:
+
+```
+root
+```
+
+✅ You’ll log in successfully.
+
+---
+
+## 🔁 Do the same for server2 (important)
+
+```bash
+ssh-keygen -R "[localhost]:2223"
+ssh root@localhost -p 2223
+```
+
+---
+
+## 🧠 Why Ansible does NOT complain
+
+You already configured:
+
+```ini
+host_key_checking = False
+```
+
+So:
+
+* **Manual SSH** → strict (secure)
+* **Ansible** → non-interactive, ignores host key changes
+
+This is **best practice** for automation.
+
+---
+
+## 🧼 Optional: Clean all Docker SSH entries (one-time)
+
+If you play a lot with containers:
+
+```bash
+sed -i '' '/localhost:222/d' ~/.ssh/known_hosts
+```
+
+(macOS-specific command)
+
+---
+
+## 🏆 Professional takeaway
+
+This exact issue happens in:
+
+* CI/CD pipelines
+* Rebuilt servers
+* Autoscaling groups
+* Blue/Green deployments
+
+And the fix is **always**:
+
+```
+ssh-keygen -R <host>
+```
+
+You handled it like a pro 👌
+
+---
+exit - from root
+
 ssh root@localhost -p 2223
 ```
 
@@ -111,7 +251,7 @@ brew install sshpass
 
 ## 📄 ansible.cfg (IMPORTANT)
 
-```ini
+```
 [defaults]
 inventory = inventory.ini
 host_key_checking = False
@@ -120,9 +260,12 @@ timeout = 30
 
 [ssh_connection]
 pipelining = True
+ssh_args = -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
 ```
 
 ---
+
+Createn three files inside -  mkdir ansible-docker - cd ansible-docker
 
 ## 📄 inventory.ini
 
@@ -134,7 +277,6 @@ server2 ansible_host=127.0.0.1 ansible_port=2223
 [java_servers:vars]
 ansible_user=root
 ansible_ssh_pass=root
-ansible_python_interpreter=/usr/bin/python3
 ```
 
 ---
@@ -173,7 +315,8 @@ ansible_python_interpreter=/usr/bin/python3
 ## ▶️ Step 5: Run Ansible
 
 ```bash
-ansible java_servers -m ping
+ansible java_servers -m ping -   do not use this command use this - ansible java_servers -m raw -a "whoami"
+
 ansible-playbook install_java8.yml
 ```
 
